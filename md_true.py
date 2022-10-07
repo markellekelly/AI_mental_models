@@ -25,7 +25,7 @@ stan_code = """
     int n_participants;
     int K; 
     int<lower=1,upper=K> Y[n_participants,n_items];
-    matrix[n_participants, n_items] topics2;
+    vector[n_items] topics;
     vector[K-1] v;
   } 
   parameters {
@@ -72,6 +72,15 @@ stan_code = """
     real<lower=0> sigma;
   }  
   transformed parameters{
+
+    matrix[n_items,n_topics] loadings;
+    for (i in 1:n_items){
+        int topic = real_to_int(topics[i]);
+        row_vector[n_topics] col;
+        col = rep_row_vector(0,n_topics);
+        col[topic] = 1;
+        loadings[i] = col;
+    }
 
     vector[16] d = [d_true1,d_true2,d_true3,d_true4,d_true5,d_true6,d_true7,d_true8,d_true9,d_true10,
         d_true11,d_true12,d_true13,d_true14,d_true15,d_true16]';
@@ -124,16 +133,6 @@ stan_code = """
     sigma ~ cauchy(0,2);
 
     for (i in 1:n_participants){
-        vector[n_items] topics;
-        topics = topics2[i]';
-        matrix[n_items,n_topics] loadings;
-        for (k in 1:n_items){
-            int topic = real_to_int(topics[k]);
-            row_vector[n_topics] col;
-            col = rep_row_vector(0,n_topics);
-            col[topic] = 1;
-            loadings[k] = col;
-        }
         for (j in 1:n_items){
             real p;
             vector[K] Pmf;
@@ -150,7 +149,6 @@ stan_code = """
 
 df = pd.read_csv('data_pilot.csv',index_col=0)
 dat = np.array(df).tolist()
-tops = np.array(pd.read_csv('topics.csv',index_col=0)).tolist()
 participants = len(df)
 
 data = {"n_items": 16,
@@ -158,7 +156,7 @@ data = {"n_items": 16,
             "n_participants":participants,
             "K": 12+1,
             "Y": dat,
-            "topics2":tops,
+            "topics":[1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4],
             "v":[0, 0.09090909, 0.18181818, 0.27272727, 0.36363636,
        0.45454545, 0.54545455, 0.63636364, 0.72727273, 0.81818182,
        0.90909091, 1]}
