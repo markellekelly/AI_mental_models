@@ -2250,6 +2250,9 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
     margin-bottom: 30px;
     margin-top: 30px;
   }
+  #conditions {
+    display:none;
+  }
 </style>
 
 <crowd-form answer-format="flatten-objects">
@@ -2268,11 +2271,19 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
     <div class="buttonplacement"><crowd-button class="navbutton" onClick="finishedInstr1()">Continue</crowd-button></div>
   </div>
 
+  <div id="conditions">
+    <div id="human" name="${human_other}"></div>
+  </div>
+
   <div class="grayscreen" id="instructions2">
     <h3>Instructions</h3>
-    <p id="otherExp">
+    <p id="otherExp1">
       In addition to estimating your own performance, you will also estimate the performance of another participant, <b><span id="hName"></span></b>. 
       This is a real person who has previously participated in the experiment (although their name has been changed).
+    </p>
+    <p id="otherExp2">
+      In addition to estimating your own performance, you will also estimate the performance of an <b>artificial intelligence (AI) system</b>, which
+        is a technology that has analyzed large amounts of data and can use this information to answer new questions. 
     </p>
     <div class="buttonplacement"><crowd-button class="navbutton" onClick="finishedInstr2()">Continue</crowd-button></div>
   </div>
@@ -2512,8 +2523,15 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
     }
   }
 
+  function questionSetup(text, trial) {
+    $( '#estimateProceed').prop('disabled', true);
+    $('input[name="answer"]').prop('checked',false);
+    $('#triviaquestion').text(text); 
+    $('#toptextLeft').text('Question ' + (trial+1) + ' of ' + nTrialsTotal); 
+  }
+
   function doExperimentTrials( whphase, questions ) {
-    if (whphase=="start") {
+    if (whphase=="start") { // first question
         trialNow = 0;
         nTrialsTotal = questions.length;
         nTrialsTotal = 2; // short
@@ -2524,55 +2542,36 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
 
         // Randomize order of trials
         var Order = new Array( nTrialsTotal );
-        for (let i=0; i<nTrialsTotal; i++) Order[ i ] = i;
+        for (let i=0; i<nTrialsTotal; i++) Order[i] = i;
         Order = Order.shuffled();
         reorder( questions, Order, nTrialsTotal );
 
-        $('#triviaquestion').text(questions[trialNow].QUESTION); 
-        $('#toptextLeft').text('Question ' + (trialNow+1) + ' of ' + nTrialsTotal); 
-        
+        questionSetup(questions[trialNow].QUESTION, trialNow);
         populateAnswers(questions[trialNow]);
-
-        $( '#estimateProceed').prop('disabled', true);
-        $('input[name="answer"]').prop('checked',false);
-        $( '#questionPage').show();
-
+        $('#questionPage').show();
         start = Date.now();
-
     } else if (whphase=="nexttrial") {
         // Store question ID under set number - trial - Q
-        var newElement = '<input  type="hidden" name=' + (setNum+1) + "-" + (trialNow+1) + '-Q value="' + questions[ trialNow ].QID + '">';
-        $('#addhere').append( newElement );
-
+        var questID = '<input  type="hidden" name=' + (setNum+1) + "-" + (trialNow+1) + '-Q value="' + questions[ trialNow ].QID + '">';
         var ans = $('input[name="answer"]:checked').val();
         // Store user answer under set number - trial - A
-        var newElement = '<input  type="hidden" name=' +(setNum+1) + "-" + (trialNow+1) + '-A value="' + ans + '">';
-        $('#addhere').append( newElement );
+        var userAns = '<input  type="hidden" name=' +(setNum+1) + "-" + (trialNow+1) + '-A value="' + ans + '">';
+        $('#addhere').append(questID).append(userAns);
 
         if (questions[trialNow].CORRECT == ans) {
           numCorrect += 1;
         }
 
-        // After this point, the worker cannot do the experiment for a second time
-        updateWorkerIDCounts();
-
+        updateWorkerIDCounts();// After this point, the worker cannot do the experiment for a second time
         psid = questions[trialNow].PSID; 
-
         trialNow++;
 
         if (trialNow==nTrialsTotal) { // end of set
           finishProblemSet();
           start = Date.now();
         } else {
-
-          $('input[name="answer"]').prop('checked',false);
-          $( '#estimateProceed').prop('disabled', true); 
-          $('#triviaquestion').text(questions[trialNow].QUESTION); 
-          
+          questionSetup(questions[trialNow].QUESTION, trialNow);
           populateAnswers(questions[trialNow]);
-          
-          $('#toptextLeft').text( 'Question ' + (trialNow+1) + ' of ' + nTrialsTotal );
-          $('input[name="answer"]:checked').attr('checked',false);
           start = Date.now();
         }
     }
@@ -2587,9 +2586,10 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
   function finishedInstr1() {
     $('#instructions').hide();
     if (human){
-        $('#instructions2 #otherExp #hName').text(agentName);
+        $('#instructions2 #otherExp1 #hName').text(agentName);
+        $('#instructions2 #otherExp2').hide();
     } else {
-        $('#instructions2 #otherExp').text("In addition to estimating your own performance, you will also estimate the performance of an AI agent.");
+      $('#instructions2 #otherExp1').hide();
     }
     $('#instructions2').show();
   }
@@ -2633,35 +2633,22 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
     var ans2 = $('input[name="confanswer2"]:checked').val();
 
     // Store user estimate of # correct answers under set number - Conf;
-    var newElement = '<input type="hidden" name='+(setNum+1) + '-Conf value="' + ans + '">';
-    $('#addhere').append( newElement );
-
+    var selfAssmt = '<input type="hidden" name='+(setNum+1) + '-Conf value="' + ans + '">';
     // Store user estimate of other agent's # correct answers under set number - OtherAssessment;
-    var newElement3 = '<input type="hidden" name='+(setNum+1) + '-OtherAssessment value="' + ans2 + '">';
-    $('#addhere').append( newElement3 );
-
+    var otherAssmt = '<input type="hidden" name='+(setNum+1) + '-OtherAssessment value="' + ans2 + '">';
     // Store actual # of correct answers under set number - Prfmc
-    var newElement2 = '<input type="hidden" name='+(setNum+1) + '-Prfmc value="' + numCorrect + '">';
-    $('#addhere').append( newElement2 );
+    var trueSelf = '<input type="hidden" name='+(setNum+1) + '-Prfmc value="' + numCorrect + '">';
+    $('#addhere').append([selfAssmt, otherAssmt, trueSelf]);
 
-    // Compute difference between their confidence and actual accuracy
-    var diff = Math.abs(numCorrect - ans);
-    estDiff += diff;
     var oldNc = numCorrect;
     numCorrect = 0;
 
     // Get true performance of agent on problem set
-    var agentPerformance = 0;
-    if (human) {
-      agentPerformance = human_performances[psid];
-    } else {
-      agentPerformance = AI_performances[psid];
-    }
+    var agentPerformance = human ? human_performances[psid] : AI_performances[psid];
 
     $('input[name="confanswer1"]:checked').attr('checked',false);
     $('input[name="confanswer2"]:checked').attr('checked',false);
-
-    $( '#confDiv').hide();
+    $('#confDiv').hide();
     $('#confDiva .countbutton').removeClass('selectedcountbutton');
     $('#confDivb .countbutton').removeClass('selectedcountbutton');
     
@@ -2675,7 +2662,6 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
             $("#confDiv2 #"+divId1).parent().addClass('truecountbutton');
             $("#confDiv2 #"+divId2).parent().addClass('selectedcountbutton');
         }
-        //var otherName = human ? humanName : "the AI agent";
         fbTxt2 = 'You estimated '+ agentName + "'s performance to be " + ans2 + " and they actually answered " + agentPerformance + " correctly."
         $("#confTxt2").text(fbTxt2);
         divId1 = "ap" + agentPerformance +"2"; divId2 = "ap" + ans2+"2";
@@ -2698,23 +2684,15 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
     $('#confDiv2 .countbutton').removeClass('bothcountbutton');
 
     if (setNum+1==totalSets) {
-
-      // Store total difference between acc and confidence under performance
-      var newElement = '<input type="hidden" name=performance value="' + estDiff + '">';
-      $('#addhere').append( newElement );
-
       $( '#feedbackDiv').show();
       $('#confDiv .countButton').remove();
       $('#confDiv2 .countButton').remove();
       $('#questionPage').remove();
-
     } else {
-
       $('#topictitle').text('Question Set '+ (setNum+2) +": " + sets[setNum+1][0].SUBCATEGORY);
       $('#setstatus').text('Set ' + (setNum+2) + ' of 16');
       $('#topictext').text('In this section, you will answer 12 questions related to the topic \"' + sets[setNum+1][0].SUBCATEGORY +'.\" Click \"Continue\" to begin this section.')
       $('#startTopic').show();
-
     }
   }
 
@@ -2736,7 +2714,6 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
     // shuffle question topics
     var shuffledTopicSets = newTopicSets1.shuffled();
 
-
     // shuffle question sets within topic sets
     newTopicSets = [];
     for (var i = 0; i < shuffledTopicSets.length; i++) {
@@ -2754,7 +2731,6 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
         ind +=1;
       }
     }
-
     return sets;
   }
  
@@ -2768,13 +2744,13 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
     feedback = true;
   }
 
-  var human = false;
-  var agentName = "the AI agent";
-  var names = ["John", "Jane", "Markelle"]
-  if (Math.random() > 0.5) {
-    human = true;
+  var human = $("#conditions #human").attr('name') =="true" ? true : false;
+  var agentName = "the AI system";
+  const names = ["John", "Jane", "Markelle"];
+  if (human) {
     agentName = names[Math.floor((Math.random()*names.length))]; // choose random name
   }
+
 
   // store feedback condition, human or AI, human name
   var newElement = '<input type="hidden" name=\"feedbackCond\"" value="' + feedback + '">';
@@ -2796,19 +2772,13 @@ human_performances = {"1": 2,"2": 3,"3": 4,"4": 5,"5": 6,"6": 7,"7": 8,"8": 9,"9
     if (workerCount > 0 && workerId != 'test') {
       $('#disallowworker').show();
     } else {
-
       setNum = -1;
       totalSets = 16;
-      // totalSets = 2; // short
       numCorrect = 0;
-      estDiff = 0;
-
       sets = orderQuestions();
-
       $('#instructions').show();
     }
   });
- 
  
   </script>
 </crowd-form>
