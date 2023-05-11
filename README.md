@@ -1,1 +1,0 @@
-# AI_mental_models
