@@ -142,6 +142,9 @@ def create_modeling_files(df, p_order):
     for fname, rows in zip(fnames,all_data):
         dat = pd.DataFrame(rows)
         dat = dat.apply(lambda x: x+1) # +1 to all scores for numerical reasons
+        dat['feedback'] = df['Answer.feedbackCond']
+        dat['human'] = df['Answer.humanCond']
+        dat['highacc'] = df['Answer.goodCond']
         dat.to_csv('processed_data/'+fname+'.csv')
 
 
