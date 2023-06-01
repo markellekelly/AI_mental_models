@@ -6,7 +6,7 @@ import xarray
 import sys
 
 stan_code = """
-  data {
+data {
     int<lower=1> n_items;
     int<lower=1> n_participants;
     int<lower=1> K; 
@@ -15,15 +15,15 @@ stan_code = """
     int<lower=1> n_skip;
     int<lower=1,upper=n_participants> skip_p;
     array[n_participants, n_skip] int<lower=0,upper=16> skip_i;
-  } 
-  parameters {  
+} 
+parameters {  
     vector[n_participants] a_true;
     real<lower=0> sigma_d;
     real<lower=0> mu_d;
     real d_true[n_items];
     real<lower=0> sigma;
-  }  
-  model {
+}  
+model {
     for (i in 1:n_participants){
         a_true[i] ~ std_normal();
     }
@@ -31,47 +31,47 @@ stan_code = """
     sigma_d ~ cauchy(0,5);
     mu_d ~ normal(0,2);
     for (i in 1:n_items){
-      d_true[i] ~ normal(mu_d, sigma_d);
+        d_true[i] ~ normal(mu_d, sigma_d);
     }
   
     sigma ~ cauchy(0,2);
     
     for (i in 1:n_participants){
-      for (j in 1:n_items){
-        for (skip in 1:n_skip) {
-            if (j == skip_i[skip_p,skip]) {
-                continue;
+        for (j in 1:n_items){
+            for (skip in 1:n_skip) {
+                if (j == skip_i[skip_p,skip]) {
+                    continue;
+                }
             }
+            real p;
+            vector[K] Pmf;
+            p = inv_logit(a_true[i] - d_true[j]);
+            Pmf[1] = Phi((v[1] - p)/sigma);
+            Pmf[K] = 1 - Phi((v[K-1] - p)/sigma);
+            for (k in 2:(K-1)){ 
+                Pmf[k] = Phi((v[k] - p)/sigma) - Phi((v[k-1] - p)/sigma);}
+            Y[i,j] ~ categorical(Pmf);
         }
-        real p;
-        vector[K] Pmf;
-        p = inv_logit(a_true[i] - d_true[j]);
-        Pmf[1] = Phi((v[1] - p)/sigma);
-        Pmf[K] = 1 - Phi((v[K-1] - p)/sigma);
-        for (k in 2:(K-1)){ 
-            Pmf[k] = Phi((v[k] - p)/sigma) - Phi((v[k-1] - p)/sigma);}
-        Y[i,j] ~ categorical(Pmf);
-      }
     }
-  }
-  generated quantities {
+}
+generated quantities {
     int<lower=1,upper=K> Y_hat[n_participants,n_items];
     matrix[n_participants,n_items] log_lik;
     for (i in 1:n_participants){
-      for (j in 1:n_items){
-        vector[K] gamma;
-        real p_r;
-        vector[K] Pmf_r;
-        p_r = inv_logit(a_true[i] - d_true[j]);
-        Pmf_r[1] = Phi((v[1] - p_r)/sigma);
-        Pmf_r[K] = 1 - Phi((v[K-1] - p_r)/sigma);
-        for (k in 2:(K-1)){ 
-            Pmf_r[k] = Phi((v[k] - p_r)/sigma) - Phi((v[k-1] - p_r)/sigma);}
-        Y_hat[i,j] = categorical_rng(Pmf_r);
-        log_lik[i,j] = categorical_lpmf(Y[i,j] | Pmf_r);
-      }
+        for (j in 1:n_items){
+            vector[K] gamma;
+            real p_r;
+            vector[K] Pmf_r;
+            p_r = inv_logit(a_true[i] - d_true[j]);
+            Pmf_r[1] = Phi((v[1] - p_r)/sigma);
+            Pmf_r[K] = 1 - Phi((v[K-1] - p_r)/sigma);
+            for (k in 2:(K-1)){ 
+                Pmf_r[k] = Phi((v[k] - p_r)/sigma) - Phi((v[k-1] - p_r)/sigma);}
+            Y_hat[i,j] = categorical_rng(Pmf_r);
+            log_lik[i,j] = categorical_lpmf(Y[i,j] | Pmf_r);
+        }
     }
-  }
+}
 """
 
 def process_args(args):
@@ -131,20 +131,21 @@ def get_data(setting, agent_type, feedback_type):
     data_files = ['true_data.csv', 'self_data.csv', 'other_data.csv']
     df = pd.read_csv(data_files[setting], index_col=0)
 
-    if agent_type == 'human':
+    if agent_type == 'h':
         df = df[df['human']==True]
-    elif agent_type == 'ai':
+    elif agent_type == 'a':
         df = df[df['human']==False]
 
-    if feedback_type == 'no':
+    if feedback_type == 'nofb':
         df=df[df['feedback']==False]
-    elif feedback_type == 'yes':
+    elif feedback_type == 'fb':
         df=df[df['feedback']==True]
     
+    ind = list(df.index)
     df.drop(['feedback','human','highacc'], axis=1, inplace=True)
     dat = np.array(df).tolist()
 
-    return dat
+    return ind, dat
 
 
 def run_model(code, data, num_chains=3, num_warmup=800, num_samples=1500):
@@ -231,7 +232,7 @@ if __name__ == "__main__":
 
     # read in command line args and get corresponding dataset
     setting, agent_type, feedback_type, loocv, fname = process_args(sys.argv[1:])
-    dat = get_data(setting, agent_type, feedback_type)
+    ind, dat = get_data(setting, agent_type, feedback_type)
     participants = len(dat)
     k=12
 
@@ -240,19 +241,19 @@ if __name__ == "__main__":
         "n_participants": participants,
         "K": k+1,
         "Y": dat,
-        "v": np.linspace(0,1,k), # continuous -> discrete cutoff points
+        "v": list(np.linspace(0,1,k)), # continuous -> discrete cutoff points
         "skip_p": 1
     }
 
     if loocv: # cross-validation
-        skip_i = np.array(pd.read_csv('last4.csv', index_col=0, header=0))
-        data["skip_i"] = skip_i
+        skip_i = np.array(pd.read_csv('last4.csv', index_col=0, header=0).iloc[ind])
+        data["skip_i"] = skip_i.tolist()
         data["n_skip"] = len(skip_i[0])
         
         out, waic, loo = cv_model(data, participants, k)
 
     else: # full dataset
-        data["skip_i"] = np.zeros((participants,1), dtype=int)
+        data["skip_i"] = np.zeros((participants,1), dtype=int).tolist()
         data["n_skip"] = 1
 
         out, waic, loo = full_model(data, participants, k)
