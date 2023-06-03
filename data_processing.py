@@ -212,6 +212,9 @@ def order_by_round(df, problems):
                             ['true_data_o','self_data_o','other_data_o']):
         dat = dat.astype(int)
         dat = dat.apply(lambda x: x+1)
+        dat['feedback'] = df['Answer.feedbackCond']
+        dat['human'] = df['Answer.humanCond']
+        dat['highacc'] = df['Answer.goodCond']
         dat.to_csv('processed_data/'+name+'.csv')
 
     problems.to_csv('processed_data/problems.csv')
