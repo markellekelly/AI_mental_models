@@ -1,0 +1,12 @@
+Computed from 4500 by 1648 log-likelihood matrix
+
+          Estimate       SE
+elpd_waic -3131.21    31.82
+p_waic      114.15        -
+
+There has been a warning during the calculation. Please check the results.
+Computed from 4500 by 1648 log-likelihood matrix
+
+         Estimate       SE
+elpd_loo -3131.80    31.84
+p_loo      114.74        -
